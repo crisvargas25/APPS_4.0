@@ -1,46 +1,81 @@
 import { Document, Schema, Types, model } from "mongoose";
 import { User } from "./user";
 
-// Interfaz para tipado en TypeScript
+// Definición de la interfaz para los productos en la orden
+interface IOrderProduct {
+    productId: Types.ObjectId;
+    quantity: number;
+    price: number;
+}
+
+// Definición de la interfaz de la orden
 export interface IOrder extends Document {
     _id: Types.ObjectId;
-    creationDate: Date;
-    fkUser: Types.ObjectId;
+    userId: string;
     total: number;
     subtotal: number;
-    status: boolean; // Added for logical deletes
+    status: string;
+    createDate: Date;
+    updateDate: Date;
+    products: IOrderProduct[];
 }
+
+// Esquema de producto en la orden
+const orderProductSchema = new Schema<IOrderProduct>({
+    productId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true,
+    },
+    quantity: {
+        type: Number,
+        required: true,
+        min: 1,
+    },
+    price: {
+        type: Number,
+        required: true,
+        min: 0,
+    }
+}, { _id: false });
 
 // Esquema de la orden
 const orderSchema = new Schema<IOrder>({
-    creationDate: {
-        type: Date,
-        default: Date.now,
-    },
-    fkUser: {
-    type: Schema.Types.ObjectId,
-    ref: User,
-    required: true,
+    userId: {
+        type: String,
+        required: true,
     },
     total: {
         type: Number,
         required: true,
-        min: 0,
     },
     subtotal: {
         type: Number,
         required: true,
-        min: 0,
+    },
+    products: {
+        type: [orderProductSchema],
+        required: true,
+        validate: [(array: any[]) => array.length > 0, 'La orden debe contener al menos un producto'],
+    },
+    createDate: {
+        type: Date,
+        default: Date.now,
+    },
+    updateDate: {
+        type: Date,
+        default: Date.now,
     },
     status: {
-    type: Boolean,
-    default: true,
+        type: String,
+        required: true,
+        enum: ['pagado', 'cancelado', 'pendiente'],
+        default: 'pendiente'
     }
-}, {
-    timestamps: true // Opcional: agrega createdAt y updatedAt automáticamente
 });
+
+// Excluir __v de las respuestas JSON
+orderSchema.set('toJSON', { versionKey: false });
 
 // Exportar el modelo
 export const Order = model<IOrder>('Order', orderSchema, 'orders');
-
-// Tercer parámetro es el nombre exacto de la colección en la base de datos

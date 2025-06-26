@@ -1,213 +1,263 @@
 import { Request, Response } from 'express';
 import { Order, IOrder } from '../models/order';
-import { User } from '../models/user';
-import { Types } from 'mongoose';
+import { Product } from '../models/product';
+import mongoose from 'mongoose';
 
+// Tasa de IVA (16%)
+const IVA_RATE = 0.16;
 
-// Create a new order
+// Enum para los estados válidos de la orden
+enum OrderStatus {
+  Pagado = 'pagado',
+  Cancelado = 'cancelado',
+  Pendiente = 'pendiente'
+}
+
+// Interfaz para la respuesta de error
+interface ErrorResponse {
+  message: string;
+  details?: any;
+}
+
+// Crear una nueva orden
 export const createOrder = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { fkUser, total, subtotal } = req.body;
+    const { userId, products, status } = req.body;
 
-    if (!fkUser || total === undefined || subtotal === undefined) {
-      res.status(400).json({ message: 'fkUser, total, and subtotal are required' });
+    // Validar status
+    if (status && !Object.values(OrderStatus).includes(status)) {
+      res.status(400).json({
+        message: 'Estado inválido. Debe ser pagado, cancelado o pendiente'
+      });
       return;
     }
 
-    if (!Types.ObjectId.isValid(fkUser)) {
-      res.status(400).json({ message: 'Invalid fkUser ID' });
-      return;
+    // Validar que los productos existan y obtener sus precios
+    let subtotal = 0;
+    const validatedProducts = [];
+
+    for (const product of products) {
+      const dbProduct = await Product.findById(product.productId);
+      if (!dbProduct) {
+        res.status(404).json({
+          message: `Producto con ID ${product.productId} no encontrado`
+        });
+        return;
+      }
+      if (product.quantity < 1) {
+        res.status(400).json({
+          message: 'La cantidad debe ser mayor a 0'
+        });
+        return;
+      }
+      validatedProducts.push({
+        productId: product.productId,
+        quantity: product.quantity,
+        price: dbProduct.price
+      });
+      subtotal += dbProduct.price * product.quantity;
     }
 
-    // Check if user exists and is active
-    const user = await User.findOne({ _id: fkUser, status: true });
-    if (!user) {
-      res.status(404).json({ message: 'User not found or inactive' });
-      return;
-    }
+    // Calcular total con IVA
+    const total = subtotal * (1 + IVA_RATE);
 
-    const order: IOrder = await Order.create({
-      fkUser,
-      total,
+    // Crear la orden
+    const orderData: Partial<IOrder> = {
+      userId,
+      products: validatedProducts,
       subtotal,
-      status: true
-    });
+      total,
+      status: status || OrderStatus.Pendiente,
+      createDate: new Date(),
+      updateDate: new Date()
+    };
 
-    await order.populate('fkUser', 'name email');
+    const order = new Order(orderData);
+    await order.save();
 
     res.status(201).json({
-      message: 'Order created successfully',
-      order: {
-        id: order._id,
-        creationDate: order.creationDate,
-        fkUser: order.fkUser,
-        total: order.total,
-        subtotal: order.subtotal,
-        status: order.status
-      }
+      message: 'Orden creada exitosamente',
+      order
     });
   } catch (error) {
-    console.error('Error:', error);
     res.status(500).json({
-      message: 'An error occurred while creating order',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Error al crear la orden',
+      details: error instanceof Error ? error.message : error
     });
   }
 };
 
-// Get all orders
-export const getAllOrders = async (req: Request, res: Response): Promise<void> => {
+// Obtener todas las órdenes
+export const getOrders = async (req: Request, res: Response): Promise<void> => {
   try {
-    const orders = await Order.find({ status: true })
-      .populate('fkUser', 'name email');
+    const orders = await Order.find()
+      .populate('products.productId')
+      .lean();
 
     res.status(200).json({
-      message: 'Orders retrieved successfully',
+      message: 'Órdenes obtenidas exitosamente',
       orders
     });
   } catch (error) {
-    console.error('Error:', error);
     res.status(500).json({
-      message: 'An error occurred while getting all orders',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Error al obtener las órdenes',
+      details: error instanceof Error ? error.message : error
     });
   }
 };
 
-// Get a single order by ID
+// Obtener una orden por ID
 export const getOrderById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
-    if (!Types.ObjectId.isValid(id)) {
-      res.status(400).json({ message: 'Invalid order ID' });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'ID de orden inválido' });
       return;
     }
 
-    const order = await Order.findOne({ _id: id, status: true })
-      .populate('fkUser', 'name email');
+    const order = await Order.findById(id)
+      .populate('products.productId')
+      .lean();
 
     if (!order) {
-      res.status(404).json({ message: 'Order not found or inactive' });
+      res.status(404).json({ message: 'Orden no encontrada' });
       return;
     }
 
     res.status(200).json({
-      message: 'Order retrieved successfully',
-      order: {
-        id: order._id,
-        creationDate: order.creationDate,
-        fkUser: order.fkUser,
-        total: order.total,
-        subtotal: order.subtotal,
-        status: order.status
-      }
+      message: 'Orden obtenida exitosamente',
+      order
     });
   } catch (error) {
-    console.error('Error:', error);
     res.status(500).json({
-      message: 'An error occurred while getting order by ID',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Error al obtener la orden',
+      details: error instanceof Error ? error.message : error
     });
   }
 };
 
-// Update an order
+// Actualizar una orden
 export const updateOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { fkUser, total, subtotal } = req.body;
+    const { userId, products, status } = req.body;
 
-    if (!Types.ObjectId.isValid(id)) {
-      res.status(400).json({ message: 'Invalid order ID' });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'ID de orden inválido' });
       return;
     }
 
-    const order = await Order.findOne({ _id: id, status: true });
+    // Validar status si se proporciona
+    if (status && !Object.values(OrderStatus).includes(status)) {
+      res.status(400).json({
+        message: 'Estado inválido. Debe ser pagado, cancelado o pendiente'
+      });
+      return;
+    }
+
+    const updateData: Partial<IOrder> = {
+      updateDate: new Date()
+    };
+
+    // Actualizar userId si se proporciona
+    if (userId) {
+      updateData.userId = userId;
+    }
+
+    // Si se proporcionan productos, validarlos y recalcular precios
+    if (products) {
+      let subtotal = 0;
+      const validatedProducts = [];
+
+      for (const product of products) {
+        const dbProduct = await Product.findById(product.productId);
+        if (!dbProduct) {
+          res.status(404).json({
+            message: `Producto con ID ${product.productId} no encontrado`
+          });
+          return;
+        }
+        if (product.quantity < 1) {
+          res.status(400).json({
+            message: 'La cantidad debe ser mayor a 0'
+          });
+          return;
+        }
+        validatedProducts.push({
+          productId: product.productId,
+          quantity: product.quantity,
+          price: dbProduct.price
+        });
+        subtotal += dbProduct.price * product.quantity;
+      }
+
+      updateData.products = validatedProducts;
+      updateData.subtotal = subtotal;
+      updateData.total = subtotal * (1 + IVA_RATE);
+    }
+
+    if (status) {
+      updateData.status = status;
+    }
+
+    const order = await Order.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true
+    }).populate('products.productId');
+
     if (!order) {
-      res.status(404).json({ message: 'Order not found or inactive' });
+      res.status(404).json({ message: 'Orden no encontrada' });
       return;
     }
-
-    if (fkUser) {
-      if (!Types.ObjectId.isValid(fkUser)) {
-        res.status(400).json({ message: 'Invalid fkUser ID' });
-        return;
-      }
-      const user = await User.findOne({ _id: fkUser, status: true });
-      if (!user) {
-        res.status(404).json({ message: 'User not found or inactive' });
-        return;
-      }
-      order.fkUser = fkUser;
-    }
-
-    if (total !== undefined) order.total = total;
-    if (subtotal !== undefined) order.subtotal = subtotal;
-    if (typeof req.body.status === 'boolean') order.status = req.body.status;
-
-    const savedOrder = await order.save();
-
-    await savedOrder.populate('fkUser', 'name email');
 
     res.status(200).json({
-      message: 'Order updated successfully',
-      order: {
-        id: savedOrder._id,
-        creationDate: savedOrder.creationDate,
-        fkUser: savedOrder.fkUser,
-        total: savedOrder.total,
-        subtotal: savedOrder.subtotal,
-        status: savedOrder.status
-      }
+      message: 'Orden actualizada exitosamente',
+      order
     });
   } catch (error) {
-    console.error('Error:', error);
     res.status(500).json({
-      message: 'An error occurred while updating order',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Error al actualizar la orden',
+      details: error instanceof Error ? error.message : error
     });
   }
 };
 
-// Delete an order (logical delete)
+// Cancelar una orden (cambiar status a cancelado)
 export const deleteOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
-    if (!Types.ObjectId.isValid(id)) {
-      res.status(400).json({ message: 'Invalid order ID' });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ message: 'ID de orden inválido' });
       return;
     }
 
-    const order = await Order.findOne({ _id: id, status: true });
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { 
+        status: OrderStatus.Cancelado,
+        updateDate: new Date()
+      },
+      { 
+        new: true,
+        runValidators: true
+      }
+    ).populate('products.productId');
+
     if (!order) {
-      res.status(404).json({ message: 'Order not found or already inactive' });
+      res.status(404).json({ message: 'Orden no encontrada' });
       return;
     }
-
-    order.status = false;
-
-    const savedOrder = await order.save();
-
-    await savedOrder.populate('fkUser', 'name email');
 
     res.status(200).json({
-      message: 'Order logically deleted successfully',
-      order: {
-        id: savedOrder._id,
-        creationDate: savedOrder.creationDate,
-        fkUser: savedOrder.fkUser,
-        total: savedOrder.total,
-        subtotal: savedOrder.subtotal,
-        status: savedOrder.status
-      }
+      message: 'Orden cancelada exitosamente',
+      order
     });
   } catch (error) {
-    console.error('Error:', error);
     res.status(500).json({
-      message: 'An error occurred while deleting order',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Error al cancelar la orden',
+      details: error instanceof Error ? error.message : error
     });
   }
 };

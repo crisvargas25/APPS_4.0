@@ -1,15 +1,32 @@
 import { Document, Schema, model, Types } from "mongoose";
 
+export interface IRole {
+    roleType: string;
+    description?: string;
+}
+
 export interface IUser extends Document {
+    _id: Types.ObjectId; // Agregar explícitamente _id
     name: string;
     email: string;
     password: string;
-    role: string;
+    role: IRole;
     phone: string;
     createdDate: Date;
     deleteDate: Date;
     status: boolean;
 }
+
+const roleSchema = new Schema<IRole>({
+    roleType: {
+        type: String,
+        required: true,
+    },
+    description: {
+        type: String,
+        required: false,
+    },
+});
 
 const userSchema = new Schema<IUser>({
     name: {
@@ -26,7 +43,7 @@ const userSchema = new Schema<IUser>({
         required: true,
     },
     role: {
-        type: String,
+        type: roleSchema,
         required: true,
     },
     phone: {
@@ -49,5 +66,4 @@ const userSchema = new Schema<IUser>({
     },
 });
 
-
-export const User = model<IUser>('User', userSchema, 'user')
+export const User = model<IUser>("User", userSchema, "user");
