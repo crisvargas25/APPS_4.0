@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import MenuItem from '../models/MenuItem';
+import MenuItem from '../models/menuItem';
 
 // Interfaz para los ítems iniciales (sin _id)
 interface MenuItemInput {
@@ -18,7 +18,7 @@ export const initializeMenuItems = async () => {
       const initialItems: MenuItemInput[] = [
         {
           title: 'Inicio',
-          path: '/dashboard',
+          path: '/',
           icon: 'HomeOutlined',
           roles: ['admin', 'user'],
           isActive: true,
