@@ -7,9 +7,9 @@ const router = Router();
 router.post('/login', login); // POST /api/auth/login
 router.post('/gettime', getTimeToken);
 router.get('/update', updateToken); // GET /api/auth/update?userId=123456
-router.get('/getusers', getAllUsers);
+router.get('/getall', getAllUsers);
 router.post('/register', registerUser);
-router.post('/userupdate', updateUser);
+router.patch('/update', updateUser);
 router.delete('/delete/:id', deleteUser);
 
 
