@@ -8,7 +8,7 @@ import menuRoutes from './routes/menuRoutes';
 import connectDB from './config/db';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Permitir todas las solicitudes CORS
 app.use(cors({
