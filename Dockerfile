@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Exponer el puerto en el que corre el servicio
-EXPOSE 5173
+EXPOSE 3001
 
 # Comando para iniciar la aplicación compilada
 CMD ["npx", "tsx", "dist/index.js"]
