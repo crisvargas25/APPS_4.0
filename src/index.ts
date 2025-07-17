@@ -1,4 +1,3 @@
-
 import express from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
@@ -11,25 +10,14 @@ import connectDB from './config/db';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const whitelist = [
-  'http://localhost:5173',
-  'https://rootsense.site',
-];
-
-const corsOptions: cors.CorsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || whitelist.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS policy: Origin not allowed'));
-    }
-  },
+// Permitir todas las solicitudes CORS
+app.use(cors({
+  origin: '*', // ¡Permitir todos los orígenes!
   credentials: true,
-};
+}));
 
 app.use(express.json());
 app.use(morgan('dev'));
-app.use(cors(corsOptions));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
