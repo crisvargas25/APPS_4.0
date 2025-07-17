@@ -3,7 +3,7 @@ import mongoose from "mongoose"
 
 
 const connectDB = async () : Promise<void> => {
-    const mongoUrl="mongodb://admin:admin@localhost:27017/userdb?authSource=admin"
+    const mongoUrl="mongodb://mongo:ZKuxeckPwFyvaVPidWSdppuKrRHyeJnY@shortline.proxy.rlwy.net:27092"
     try {
         await mongoose.connect(mongoUrl)
         console.log("conectado a mongo")
